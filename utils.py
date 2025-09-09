@@ -239,8 +239,58 @@ class CANedgeXCP:
         return signal_scaling
             
     # ----------------------------------
+    # Helper function to expand a matrix signal into individual signals with incremented addresses
+    def expand_matrix_signal(self, signal):
+        import re
+        
+        matrix_dim = int(signal.get("MatrixDim", 0))
+        if matrix_dim <= 0:
+            return [signal]  # Return original signal if no matrix dimension
+            
+        expanded_signals = []
+        base_name = signal.get("Name", "")
+        ecu_addr_str = signal.get("ECU_ADDRESS", "")
+        
+        # Skip if no ECU address
+        if not ecu_addr_str:
+            print(f"Warning: Matrix signal {base_name} has no ECU_ADDRESS, skipping expansion")
+            return [signal]
+            
+        # Convert ECU address to integer
+        try:
+            ecu_addr = int(ecu_addr_str.replace("0x", ""), 16)
+        except (ValueError, TypeError):
+            print(f"Warning: Invalid ECU_ADDRESS for {base_name}: {ecu_addr_str}")
+            return [signal]
+        
+        # Get signal byte length
+        signal_length = signal.get("Length", 0)
+        
+        # Create individual signals for each matrix element
+        for i in range(matrix_dim):
+            expanded_signal = signal.copy()
+            
+            # Update name with matrix index suffix
+            expanded_signal["Name"] = f"{base_name}_MX_{i}"
+            
+            # Update ECU address for this element
+            new_addr = ecu_addr + (i * signal_length)
+            expanded_signal["ECU_ADDRESS"] = f"0x{new_addr:X}"
+            
+            # Add matrix index for reference
+            expanded_signal["MATRIX_INDEX"] = i
+            
+            # Remove the MATRIX_DIM entry as it's now expanded
+            if "MATRIX_DIM" in expanded_signal:
+                del expanded_signal["MATRIX_DIM"]
+                
+            expanded_signals.append(expanded_signal)
+        
+        return expanded_signals
+
     # function for loading all signals from multiple A2L files
-    def load_a2l_signals(self, a2l_dict, a2l_compu_methods):        
+    def load_a2l_signals(self, a2l_dict, a2l_compu_methods):     
+        import json   
         signals = {}
         
         # Create a lookup dictionary for computation methods
@@ -254,33 +304,47 @@ class CANedgeXCP:
             # Keep only unique Name entries, overwriting duplicates
             for signal in signals_partial:
                 signals[signal["Name"]] = signal
-            
-        new_signals = []
+        
+        # Process signals and handle matrix dimensions
+        processed_signals = []
         for signal in signals.values():
+            # Get signal properties
             dt = signal.get("Datatype", "").strip().lower()
             signage, length = self.data_type_map.get(dt, ("unknown", 0))
-
+            
+            # Extract matrix dimension
+            matrix_dim_list = signal.get("MATRIX_DIM", "")
+            matrix_dim = int(matrix_dim_list[0]) if matrix_dim_list != "" else 0
+            
+            # Create new signal with all necessary attributes
             new_signal = {}
             for key, value in signal.items():
                 new_signal[key] = value
-                if key == "Name":
-                    new_signal["Signage"] = signage
-                    new_signal["Length"] = length
-                    
-                    # Lookup computation method using CONVERSION value
-                    compu_method = compu_methods_lookup.get(signal.get("CONVERSION", ""))
-                    if compu_method:
-                        new_signal["Scale"] = compu_method["Scale"]
-                        new_signal["Offset"] = compu_method["Offset"]
-                        new_signal["Unit"] = compu_method["Unit"]
-                    else:
-                        new_signal["Scale"] = 1  # Default scale if no match found
-                        new_signal["Offset"] = 0  # Default offset if no match found
-                        new_signal["Unit"] = ""  # Default unit if no match found
             
-            new_signals.append(new_signal)
-        
-        return new_signals
+            # Add signal properties
+            new_signal["Signage"] = signage
+            new_signal["Length"] = length
+            new_signal["MatrixDim"] = matrix_dim
+            
+            # Lookup computation method using CONVERSION value
+            compu_method = compu_methods_lookup.get(signal.get("CONVERSION", ""))
+            if compu_method:
+                new_signal["Scale"] = compu_method["Scale"]
+                new_signal["Offset"] = compu_method["Offset"]
+                new_signal["Unit"] = compu_method["Unit"]
+            else:
+                new_signal["Scale"] = 1  # Default scale if no match found
+                new_signal["Offset"] = 0  # Default offset if no match found
+                new_signal["Unit"] = ""  # Default unit if no match found
+            
+            # If this is a matrix signal, expand it into individual signals
+            if matrix_dim > 0:
+                expanded_signals = self.expand_matrix_signal(new_signal)
+                processed_signals.extend(expanded_signals)
+            else:
+                processed_signals.append(new_signal)
+       
+        return processed_signals
                 
     # ----------------------------------
     # function for loading file with filtered signals provided by user
@@ -311,26 +375,67 @@ class CANedgeXCP:
     # ----------------------------------
     # function for filtering A2L signals based on filter list (and adding event ID as EventConfigured)
     def filter_a2l_signals(self,a2l_signals_all, user_signals, a2l_params):  
-        import json   
+        import json
+        import re
         
         # Clear previously matched signals
         self.matched_signals = set()
         
         max_dto = min(int(a2l_params["MAX_DTO"], 16),64)
         signals_filtered_dict = {}
+        
+        # Compile a regex pattern for matching matrix signals
+        # Pattern matches base_name_MX_index format
+        matrix_pattern = re.compile(r"(.+)_MX_([0-9]+)$")
+        
+        # First pass: build a mapping of base names to matrix signals
+        matrix_signals = {}
         for signal in a2l_signals_all:
             signal_name = signal.get("Name", "").strip()
-            if signal_name in user_signals:
-                if signal_name not in signals_filtered_dict:
-                    # Create a new dictionary with "Name" and "EventConfigured" first.
+            matrix_match = matrix_pattern.match(signal_name)
+            
+            if matrix_match:
+                base_name = matrix_match.group(1)
+                if base_name not in matrix_signals:
+                    matrix_signals[base_name] = []
+                matrix_signals[base_name].append(signal)
+        
+        # Second pass: process all signals including matrix matches
+        for signal in a2l_signals_all:
+            signal_name = signal.get("Name", "").strip()
+            
+            # Check for direct match
+            direct_match = signal_name in user_signals
+            
+            # Check for matrix match (if signal is part of a matrix)
+            matrix_match = matrix_pattern.match(signal_name)
+            base_name_match = False
+            
+            if matrix_match:
+                base_name = matrix_match.group(1)
+                base_name_match = base_name in user_signals
+            
+            if direct_match or base_name_match:
+                event_config = None
+                
+                # Determine which event configuration to use
+                if direct_match:
+                    event_config = user_signals[signal_name]
+                elif base_name_match:
+                    event_config = user_signals[base_name]
+                
+                if signal_name not in signals_filtered_dict and event_config is not None:
+                    # Create a new dictionary with "Name" and "EventConfigured" first
                     new_signal = {}
                     new_signal["Name"] = signal_name
-                    new_signal["EventConfigured"] = user_signals[signal_name]
-                    # Add all other key/value pairs from the original signal.
+                    new_signal["EventConfigured"] = event_config
+                    
+                    # Add all other key/value pairs from the original signal
                     for key, value in signal.items():
                         if key != "Name":
                             new_signal[key] = value
                     
+                    # Validation checks
                     if new_signal.get("Length", 0) == 0:
                         print(f"Warning: Removed {signal_name} (length of 0)")
                         continue
@@ -341,6 +446,10 @@ class CANedgeXCP:
                     signals_filtered_dict[signal_name] = new_signal
                     # Add to matched signals set
                     self.matched_signals.add(signal_name)
+                    
+                    # If this is a matrix signal, also add its base name to matched signals for reporting
+                    if matrix_match and base_name_match:
+                        self.matched_signals.add(base_name)
 
         signals_filtered = list(signals_filtered_dict.values())       
             
