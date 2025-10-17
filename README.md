@@ -1,8 +1,8 @@
-# CANedge-XCP: A2L to DAQ 'transmit list' + DBC [BETA]
+# CANedge-DAQ: A2L to DAQ 'transmit list' + DBC
 
 ## Overview
 
-This project helps you use the CANedge for XCP on CAN data acquisition:
+This project helps you use the CANedge for CCP / XCP on CAN data acquisition:
 
 - Load A2L file(s) 
 - Load user-defined text file (e.g. `CSV`) with ECU signal names and event channel numbers 
@@ -37,7 +37,7 @@ pip install jsonschema
 - Open your [command prompt](https://www.youtube.com/watch?v=bgSSJQolR0E&t=47s) and run below: 
 
 ```
-python canedge_xcp.py path/to/ecu1.dbc path/to/ecu1.json path/to/ecu1.csv --a2l path/to/ecu1_part1.a2l path/to/ecu1_part2.a2l
+python canedge_daq.py path/to/ecu1.dbc path/to/ecu1.json path/to/ecu1.csv --a2l path/to/ecu1_part1.a2l
 ```
 
 The script will output the generated CANedge transmit list and DBC file. You can easily load the transmit list into an existing Configuration File locally (e.g. from an SD) with optional Rule Schema validation:
@@ -50,11 +50,18 @@ Alternatively, you can load it via the [CANedge Config Editor](https://canlogger
 
 ### Test with sample A2L and CSV
 
-You can test the functionality via our sample files:
+You can test the functionality via our sample CCP/XCP files via the `.bat` files or below:
 
+#### CCP sample test 
 ```
-python canedge_xcp.py tests/output/ecu1.dbc tests/output/ecu1.json tests/measurement-files/sample.csv --a2l tests/a2l-files/ECU-sample-file.a2l
-python update_existing_config.py tests/output/ecu1.json tests/config-schema-files/config-01.09.json true --input_schema_file tests/config-schema-files/schema-01.09.json
+python canedge_daq.py tests/output/ecu1-ccp.dbc tests/output/ecu1-ccp.json tests/measurement-files/sample-ccp.csv --a2l tests/a2l-files/ECU-sample-file-ccp.a2l
+python update_existing_config.py tests/output/ecu1-ccp.json tests/config-schema-files/config-01.09.json true --input_schema_file tests/config-schema-files/schema-01.09.json
+```
+
+#### XCP sample test 
+```
+python canedge_daq.py tests/output/ecu1-xcp.dbc tests/output/ecu1-xcp.json tests/measurement-files/sample-xcp.csv --a2l tests/a2l-files/ECU-sample-file-xcp.a2l
+python update_existing_config.py tests/output/ecu1-xcp.json tests/config-schema-files/config-01.09.json true --input_schema_file tests/config-schema-files/schema-01.09.json
 ```
 
 --------
@@ -69,8 +76,8 @@ The same script functionality can easily be extended for use with multiple ECUs 
 See below an example set of commands:
 
 ```
-python canedge_xcp.py path/to/ecu1.dbc path/to/ecu1.json path/to/ecu1.csv --a2l path/to/ecu1_part1.a2l path/to/ecu1_part2.a2l
-python canedge_xcp.py path/to/ecu2.dbc path/to/ecu1.json path/to/ecu2.csv --a2l path/to/ecu2.a2l
+python canedge_daq.py path/to/ecu1.dbc path/to/ecu1.json path/to/ecu1.csv --a2l path/to/ecu1_part1.a2l path/to/ecu1_part2.a2l
+python canedge_daq.py path/to/ecu2.dbc path/to/ecu1.json path/to/ecu2.csv --a2l path/to/ecu2.a2l
 python combine_multiple_ecus.py path/to/ecu1_and_ecu2.json --input_transmit_files path/to/ecu1.json path/to/ecu2.json --offset_delta -500
 ```
 
@@ -95,6 +102,6 @@ You can decode the DAQ-DTO data using the output DBC file(s) in below tools:
 - The script assumes you are using CANedge FW `01.09.01+` (support for longer transmit lists)
 - It can be useful to add multiple commands in a `*.bat` file for repeated use
 - This script is provided as-is and we do not take responsibility for any issues arising from its use
-- If the A2L lacks an `XCP_ON_CAN` section, the script instead uses the `a2l_params_default.json` values
+- If the A2L lacks a CCP/XCP section, the script can instead use a default set of parameters via the `--default_params` input (see the provided CCP/XCP examples)
 
 

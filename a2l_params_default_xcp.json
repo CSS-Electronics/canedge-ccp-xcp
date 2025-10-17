@@ -3,7 +3,7 @@
   "CAN_ID_MASTER_EXTENDED": false,
   "CAN_ID_SLAVE": "0x222",
   "CAN_ID_SLAVE_EXTENDED": false,
-  "XCP_VERSION": "0x0102",
+  "VERSION": "0x0102",
   "BAUDRATE": 500000,
   "WRITE_DAQ_MULTIPLE": true,
   "BYTE_ORDER": "little",

@@ -1,0 +1,60 @@
+{
+  "CAN_FD": false,
+  "CAN_FD_DATA_TRANSFER_BAUDRATE": 1000000,
+  "MAX_CTO": "0x08",
+  "MAX_DTO": "0x08",
+  "WRITE_DAQ_MULTIPLE": false,
+  "VERSION": "0x0201",
+  "CAN_ID_MASTER": "0xcffe6fa",
+  "CAN_ID_MASTER_EXTENDED": true,
+  "CAN_ID_SLAVE": "0xcffe703",
+  "CAN_ID_SLAVE_EXTENDED": true,
+  "BAUDRATE": 1000000,
+  "BYTE_ORDER": "big",
+  "ECU_STATION_ADDRESS": "0x0500",
+  "CAN_ID_DTO": "0xcffe703",
+  "CAN_ID_DTO_EXTENDED": true,
+  "EVENTS": [
+    {
+      "EventName": "HST",
+      "EventChannelNumber": 1,
+      "EventScaler": "3",
+      "EventRate": "5"
+    },
+    {
+      "EventName": "MST",
+      "EventChannelNumber": 2,
+      "EventScaler": "3",
+      "EventRate": "20"
+    },
+    {
+      "EventName": "EVENT",
+      "EventChannelNumber": 14,
+      "EventScaler": "1000",
+      "EventRate": "0"
+    },
+    {
+      "EventName": "cyclic",
+      "EventChannelNumber": 15,
+      "EventScaler": "1000",
+      "EventRate": "0"
+    }
+  ],
+  "DAQ_LISTS": [
+    {
+      "Id": "0x00",
+      "Length": "0x28",
+      "FirstPID": "0x00"
+    },
+    {
+      "Id": "0x01",
+      "Length": "0x28",
+      "FirstPID": "0x28"
+    },
+    {
+      "Id": "0x02",
+      "Length": "0x28",
+      "FirstPID": "0x50"
+    }
+  ]
+}

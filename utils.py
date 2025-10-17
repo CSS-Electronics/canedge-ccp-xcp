@@ -1,4 +1,11 @@
-class CANedgeXCP:
+import sys, json
+
+# ----------------------------------
+# function for creating the CCP counter in hex
+def ctr_hex(counter):
+    return counter.to_bytes(1, 'big').hex().upper()
+    
+class CANedgeDAQ:
     # Initialize class
     def __init__(self, a2l_files, signal_file, default_params_file=None):
         self.a2l_files = a2l_files 
@@ -94,8 +101,125 @@ class CANedgeXCP:
             return {}
  
     # ----------------------------------
+    # function for identifying the protocol (CCP or XCP) from A2L file
+    def identify_protocol(self, a2l_dict):
+        import sys
+        
+        try:
+            for a2l_file_name, ast in a2l_dict.items():
+                if_data = ast["PROJECT"]["MODULE"]["IF_DATA"]
+                
+                # Ensure IF_DATA is a list
+                if isinstance(if_data, dict):
+                    if_data = [if_data]
+                
+                # Check for CCP section
+                ccp = next((entry for entry in if_data if "CCP" in entry.get("Name", "")), None)
+                if ccp is not None:
+                    return "ccp"
+                
+                # Check for XCP section
+                xcp = next((entry for entry in if_data if "XCP" in entry.get("Name", "")), None)
+                if xcp is not None:
+                    return "xcp"
+            
+            # If neither found, default to XCP
+            print("WARNING: Could not identify protocol from A2L file. Defaulting to XCP.")
+            return "xcp"
+            
+        except Exception as e:
+            print(f"ERROR: Failed to identify protocol: {str(e)}")
+            print("Defaulting to XCP.")
+            return "xcp"
+ 
+    # ----------------------------------
+    # function for loading general CCP parameters from A2L files
+    def load_a2l_params_ccp(self, a2l_dict):     
+        import json, sys, os
+        
+        # various fields are pre-defined in CCP due to lack of CAN FD support
+        a2l_params = {} 
+        a2l_params["CAN_FD"] = False
+        a2l_params["CAN_FD_DATA_TRANSFER_BAUDRATE"] = 1000000
+        a2l_params["MAX_CTO"] = "0x08"
+        a2l_params["MAX_DTO"] = "0x08"
+        a2l_params["WRITE_DAQ_MULTIPLE"] = False 
+        
+
+        try:
+            # Attempt to extract parameters from A2L file
+            for a2l_file_name, ast in a2l_dict.items():
+                if_data = ast["PROJECT"]["MODULE"]["IF_DATA"]
+        
+                # Ensure IF_DATA is a list or dictionary and standardize to a list for easier handling
+                if isinstance(if_data, dict):
+                    if_data = [if_data]
+
+                # Get CCP section and extract relevant information (find any entry with "CCP" in its name)
+                ccp = next((entry for entry in if_data if "CCP" in entry.get("Name", "")), None)
+                if ccp is None:
+                    raise Exception("CCP section not found in A2L file")
+               
+                a2l_params["VERSION"] = ccp["TP_BLOB"]["DataParams"][0]
+                a2l_params["CAN_ID_MASTER"], a2l_params["CAN_ID_MASTER_EXTENDED"] = self.extract_can_id(ccp["TP_BLOB"]["DataParams"][2])
+                a2l_params["CAN_ID_SLAVE"], a2l_params["CAN_ID_SLAVE_EXTENDED"] = self.extract_can_id(ccp["TP_BLOB"]["DataParams"][3])
+                a2l_params["BAUDRATE"] = self.force_int(self.get_next_value(ccp["TP_BLOB"]["DataParams"], "BAUDRATE")) 
+                a2l_params["BYTE_ORDER"] = 'big' if ccp["TP_BLOB"]["DataParams"][5] == '0x01' else 'little'
+                a2l_params["ECU_STATION_ADDRESS"] = ccp["TP_BLOB"]["DataParams"][4]
+                a2l_params["BYTES_ONLY"] = "BYTES_ONLY" in ccp["TP_BLOB"]["DataParams"]
+
+                # for simplicity we set the DAQ-DTO CAN ID equal to the slave CAN ID
+                a2l_params["CAN_ID_DTO"] = hex(int(a2l_params["CAN_ID_SLAVE"], 16))
+                a2l_params["CAN_ID_DTO_EXTENDED"] = a2l_params["CAN_ID_SLAVE_EXTENDED"]
+
+                # Add event data to list
+                event_data = []
+                events = ccp["RASTER"]
+                for event in events:
+                    event_data.append({"EventName": event["DataParams"][0].strip('"'), "EventChannelNumber": self.force_int(event["DataParams"][2]), "EventScaler": event['DataParams'][3],"EventRate": event['DataParams'][4]})
+                a2l_params["EVENTS"] = event_data   
+
+                # Extract DAQ lists from SOURCE/QP_BLOB sections
+                daq_lists = []
+                if "SOURCE" in ccp:
+                    sources = ccp["SOURCE"] if isinstance(ccp["SOURCE"], list) else [ccp["SOURCE"]]
+                    for source in sources:
+                        if "QP_BLOB" in source:
+                            qp_blob = source["QP_BLOB"]["DataParams"]
+                            daq_lists.append({
+                                "Id": qp_blob[0],
+                                "Length": qp_blob[2],
+                                "FirstPID": qp_blob[4]
+                            })
+                a2l_params["DAQ_LISTS"] = daq_lists
+
+            # print(json.dumps(a2l_params,indent=4))
+            return a2l_params
+
+        except Exception as e:
+            # If there's an error extracting from A2L, load from default JSON file
+            if self.default_params_file is None or not os.path.exists(self.default_params_file):
+                print(f"\nERROR: Failed to extract a2l_params from A2L: {str(e)}")
+                print("ERROR: No default params file provided or file does not exist.")
+                sys.exit(1)
+                
+            try:
+                print(f"\nWARNING: Failed to extract a2l_params from A2L: {str(e)}")
+                print(f"WARNING: Loading default parameters from {self.default_params_file}")
+                print("WARNING: Please review the default parameters to ensure they are valid for your ECU!")
+                
+                with open(self.default_params_file, 'r') as f:
+                    a2l_params = json.load(f)
+                return a2l_params
+                
+            except Exception as json_e:
+                print(f"ERROR: Failed to load default parameters: {str(json_e)}")
+                sys.exit(1)
+            
+
+    # ----------------------------------
     # function for loading general XCP parameters from A2L files
-    def load_a2l_params(self, a2l_dict):     
+    def load_a2l_params_xcp(self, a2l_dict):     
         import json, sys, os
         
         a2l_params = {} 
@@ -103,9 +227,8 @@ class CANedgeXCP:
         try:
             # Attempt to extract parameters from A2L file
             for a2l_file_name, ast in a2l_dict.items():
-                
                 if_data = ast["PROJECT"]["MODULE"]["IF_DATA"]
-                
+
                 # Ensure IF_DATA is a list or dictionary and standardize to a list for easier handling
                 if isinstance(if_data, dict):
                     if_data = [if_data]
@@ -118,7 +241,7 @@ class CANedgeXCP:
                 xcp_on_can = xcp["XCP_ON_CAN"]
                 a2l_params["CAN_ID_MASTER"], a2l_params["CAN_ID_MASTER_EXTENDED"] = self.extract_can_id(self.get_next_value(xcp_on_can["DataParams"], "CAN_ID_MASTER"))
                 a2l_params["CAN_ID_SLAVE"], a2l_params["CAN_ID_SLAVE_EXTENDED"] = self.extract_can_id(self.get_next_value(xcp_on_can["DataParams"], "CAN_ID_SLAVE"))
-                a2l_params["XCP_VERSION"] = xcp_on_can["DataParams"][0]
+                a2l_params["VERSION"] = xcp_on_can["DataParams"][0]
                 a2l_params["BAUDRATE"] = self.force_int(self.get_next_value(xcp_on_can["DataParams"], "BAUDRATE")) 
                 
                 # Attempt to extract PROTOCOL_LAYER and EVENT sections from XCP_ON_CAN sub section - otherwise default to general XCP section
@@ -194,8 +317,11 @@ class CANedgeXCP:
         
         for a2l_file_name, ast in a2l_dict.items():
             compu_methods = ast.find_sections("COMPU_METHOD")["COMPU_METHOD"]
-            # print(json.dumps(compu_methods,indent=4))
             
+            # Ensure compu_methods is a list (single method becomes a dict instead of a list)
+            if isinstance(compu_methods, dict):
+                compu_methods = [compu_methods]
+                        
             for method in compu_methods:
                 conversion_type = method.get("ConversionType", "")
                 unit = method.get("UNIT", "").strip('"')  # Remove surrounding quotes from UNIT
@@ -406,7 +532,6 @@ class CANedgeXCP:
             
             # Check for direct match
             direct_match = signal_name in user_signals
-            
             # Check for matrix match (if signal is part of a matrix)
             matrix_match = matrix_pattern.match(signal_name)
             base_name_match = False
@@ -457,9 +582,9 @@ class CANedgeXCP:
     
     # ----------------------------------
     # function for grouping filtered signals into DAQ and ODT lists
-    def group_signals(self, signals, a2l_params):
+    def group_signals(self, signals, a2l_params, protocol):
         from collections import defaultdict
-        import sys
+        import sys, json
         
         if len(signals) == 0:
             print("No matched signals - exiting script!")
@@ -505,12 +630,153 @@ class CANedgeXCP:
             
             daq_counter += 1
         
+        # For CCP protocol, verify ODT count doesn't exceed DAQ list capacity
+        if protocol == "ccp" and "DAQ_LISTS" in a2l_params:
+            # Count ODTs per DAQ list
+            daq_odt_counts = {}
+            for signal in signals_grouped:
+                daq_id = signal['DAQ_LIST_NUMBER']
+                odt_id = signal['ODT_NUMBER']
+                if daq_id not in daq_odt_counts:
+                    daq_odt_counts[daq_id] = set()
+                daq_odt_counts[daq_id].add(odt_id)
+            
+            # Check against DAQ_LISTS limits
+            for daq_id, odt_set in daq_odt_counts.items():
+                odt_count = len(odt_set)
+                
+                # Find corresponding DAQ list entry
+                daq_list_entry = next((dl for dl in a2l_params['DAQ_LISTS'] if dl['Id'] == daq_id), None)
+                if daq_list_entry:
+                    max_odts = int(daq_list_entry['Length'], 16)
+                    if odt_count > max_odts:
+                        print(f"\nERROR: DAQ list {daq_id} exceeds maximum ODT capacity!")
+                        print(f"  Assigned ODTs: {odt_count}")
+                        print(f"  Maximum ODTs: {max_odts} (0x{max_odts:02X})")
+                        print(f"\nPlease update your measurement file to split measurements across more DAQ lists.")
+                        print(f"Ensure signals using this event channel are distributed appropriately.")
+                        sys.exit(1)
+        
         return signals_grouped
+
 
 
     # ----------------------------------
     # function for creating the actual DAQ initialization CAN frames
-    def create_daq_frames(self, signals_grouped, a2l_params):
+    def create_daq_frames_ccp(self, signals_grouped, a2l_params):
+        daq_frames = []
+        byte_order = a2l_params['BYTE_ORDER'] 
+        max_cto = min(int(a2l_params['MAX_CTO'], 16),8)
+        can_id_dto = int(a2l_params['CAN_ID_DTO'],16)
+        daq_lists = a2l_params['DAQ_LISTS']
+        bytes_only = a2l_params['BYTES_ONLY']
+        
+        # Convert to 32-bit format for extended IDs (set bit 31 to indicate extended)
+        if a2l_params['CAN_ID_SLAVE_EXTENDED'] == True:
+            can_id_dto = can_id_dto | 0x80000000
+
+
+        ecu_station_address = a2l_params['ECU_STATION_ADDRESS']
+        max_payload_size = 8 - 1  # Max CAN frame size minus 1 byte for command ID
+        
+        # Hardcoded values
+        address_extension = "00"
+        prescaler = "01"
+        start_stop_mode = "02"
+        bit_offset = "FF"
+        dummy_byte = "00"
+
+        # Counter initialization
+        ctr = 1
+        
+        # CONNECT (using ECU station address in INTEL byte order)
+        daq_frames.append({"Name": "CONNECT", "DATA": f"01{ctr_hex(ctr)}{int(ecu_station_address,16).to_bytes(2, 'little').hex().upper()}AAAAAAAA"})
+        ctr += 1
+
+        # EXCHANGE_ID (to e.g. determine if seed & key is required)
+        daq_frames.append({"Name": "EXCHANGE_ID", "DATA": f"17{ctr_hex(ctr)}AAAAAAAAAAAA"})
+        ctr += 1
+
+        # Get all relevant DAQ lists 
+        daq_lists = sorted(set(signal['DAQ_LIST_NUMBER'] for signal in signals_grouped))
+
+        # Loop through GET_DAQ_SIZE + SET_DAQ_PTR + WRITE_DAQ
+        for daq_list in daq_lists:
+            daq_signals = [s for s in signals_grouped if s['DAQ_LIST_NUMBER'] == daq_list]
+            odts = sorted(set(s['ODT_NUMBER'] for s in daq_signals))
+
+            # GET_DAQ_SIZE (clear the DAQ list before writing elements)
+            daq_number = int(daq_list, 16).to_bytes(1, 'big').hex().upper()
+            daq_frames.append({"Name": f"GET_DAQ_SIZE_{daq_number}", "DATA": f"14{ctr_hex(ctr)}{daq_number}AA{can_id_dto.to_bytes(4,'big').hex().upper()}"})      
+            ctr += 1
+
+            for odt in odts:
+                odt_signals = [s for s in daq_signals if s['ODT_NUMBER'] == odt]
+                odt_number = int(odt, 16).to_bytes(1, 'big').hex().upper() 
+              
+                # if the ECU supports multi-byte signals, handle the writing in the normal way
+                if bytes_only == False:
+                    for idx, signal in enumerate(odt_signals):
+                        length = int(signal['Length']) 
+                        odt_entry = int(signal['ODT_ENTRY_NUMBER'], 16).to_bytes(1, 'big').hex().upper()
+
+                        # SET_DAQ_PTR (for the DAQ, ODT and ODT element)
+                        daq_frames.append({"Name": f"PTR_D{daq_number}_O{odt_number}_E{odt_entry}", "DATA": f"15{ctr_hex(ctr)}{daq_number}{odt_number}{odt_entry}AAAAAA"})
+                        ctr += 1
+                        
+                        # WRITE_DAQ (write a multi-element ECU address)
+                        ecu_address = int(signal['ECU_ADDRESS'], 16).to_bytes(4, byte_order).hex().upper()
+                        daq_frames.append({"Name": f"WRITE_DAQ", "DATA": f"16{ctr_hex(ctr)}{length:02X}{address_extension}{ecu_address}"})
+                        ctr += 1
+                elif bytes_only == True:
+                    odt_entry_manual = 0 
+                    for idx, signal in enumerate(odt_signals):
+                        length = int(signal['Length'])                     
+                        for signal_chunk_idx in range(length):
+                            odt_entry = odt_entry_manual.to_bytes(1, 'big').hex().upper()
+
+                            # SET_DAQ_PTR (for the DAQ, ODT and ODT element)
+                            daq_frames.append({"Name": f"PTR_D{daq_number}_O{odt_number}_E{odt_entry}", "DATA": f"15{ctr_hex(ctr)}{daq_number}{odt_number}{odt_entry}AAAAAA"})
+                            ctr += 1
+                            odt_entry_manual += 1
+                            
+                            # WRITE_DAQ (write a multi-element ECU address one byte at a time)
+                            ecu_address_base = int(signal['ECU_ADDRESS'], 16)
+                            ecu_address_with_offset = (ecu_address_base + signal_chunk_idx).to_bytes(4, byte_order).hex().upper()
+                    
+                            daq_frames.append({"Name": f"WRITE_DAQ", "DATA": f"16{ctr_hex(ctr)}01{address_extension}{ecu_address_with_offset}"})
+                            ctr += 1
+
+             
+
+        # START_STOP_DAQ_LIST (prepare all relevant DAQ lists)
+        for daq_list in daq_lists:
+            daq_signals = [s for s in signals_grouped if s['DAQ_LIST_NUMBER'] == daq_list]
+            odts = sorted(set(s['ODT_NUMBER'] for s in daq_signals))
+
+            event_channel = int(next(s for s in signals_grouped if s['DAQ_LIST_NUMBER'] == daq_list)['EventConfigured'], 16)
+            event_channel_hex = event_channel.to_bytes(1, byte_order).hex().upper()
+            event_scaler_hex = "0001"  # Default prescaler of 1 
+
+            # loop through ODTs in the DAQ list to get the last ODT number
+            for odt in odts:
+                daq_number = int(daq_list, 16).to_bytes(1, 'big').hex().upper()
+                odt_number = int(odt, 16).to_bytes(1, 'big').hex().upper() 
+                            
+            daq_frames.append({"Name": f"START_STOP_D{daq_number}", "DATA": f"06{ctr_hex(ctr)}{start_stop_mode}{daq_number}{odt_number}{event_channel_hex}{event_scaler_hex}"})
+            ctr += 1
+        
+        # START_STOP_ALL (initiate DAQ-DTO communication)
+        daq_frames.append({"Name": f"START_STOP_ALL", "DATA": f"08{ctr_hex(ctr)}01AAAAAAAAAA"})
+        ctr += 1
+
+        # print("daq_frames",json.dumps(daq_frames,indent=4))
+        return daq_frames
+
+
+    # ----------------------------------
+    # function for creating the actual DAQ initialization CAN frames
+    def create_daq_frames_xcp(self, signals_grouped, a2l_params):
         daq_frames = []
         byte_order = a2l_params['BYTE_ORDER'] 
         max_cto = min(int(a2l_params['MAX_CTO'], 16),64)
@@ -712,9 +978,9 @@ class CANedgeXCP:
         
     # ----------------------------------
     # function for creating DBC file from A2L signal information and DAQ frames
-    def create_dbc(self, signals_grouped, a2l_params, output_dbc, settings): 
+    def create_dbc(self, signals_grouped, a2l_params, output_dbc, settings, protocol): 
         dbc_content = [
-            'VERSION "XCP_DBC"\n',
+            f'VERSION "{protocol.upper()}_DBC"\n',
             'NS_ :',
             '\tNS_DESC_', '\tCM_', '\tBA_DEF_', '\tBA_', '\tVAL_', '\tCAT_DEF_',
             '\tCAT_', '\tFILTER', '\tBA_DEF_DEF_', '\tEV_DATA_', '\tENVVAR_DATA_',
@@ -727,6 +993,10 @@ class CANedgeXCP:
         
         byte_order_flag = '1' if a2l_params['BYTE_ORDER'] == 'little' else '0'
         can_id_slave = int(a2l_params['CAN_ID_SLAVE'], 16)
+        
+        # Convert to DBC 32-bit format for extended IDs (set bit 31 to indicate extended)
+        if a2l_params['CAN_ID_SLAVE_EXTENDED'] == True:
+            can_id_slave = can_id_slave | 0x80000000
         
         # Handle Classical vs. CAN FD fields
         dlc = 8
@@ -755,9 +1025,18 @@ class CANedgeXCP:
         signal_floats = []    # Store signal float meta data
 
         for daq_list in sorted(set(signal['DAQ_LIST_NUMBER'] for signal in signals_grouped)):
+
+            # For CCP, each DAQ list has a 'first PID' that we should start from when shifting to the DAQ list
+            if protocol == "ccp":
+                daq_list_entry = next((dl for dl in a2l_params['DAQ_LISTS'] if int(dl['Id'],16) == int(daq_list,16)), None)
+                if daq_list_entry:
+                    pid_counter = int(daq_list_entry['FirstPID'], 16)
+                
             odts = sorted(set(signal['ODT_NUMBER'] for signal in signals_grouped if signal['DAQ_LIST_NUMBER'] == daq_list))
             for odt in odts:
                 odt_signals = [s for s in signals_grouped if s['DAQ_LIST_NUMBER'] == daq_list and s['ODT_NUMBER'] == odt]
+
+
                 bit_start = 8  # Start after PID (1st byte)
                 for signal in odt_signals:
                     original_signal_name = signal['Name']
@@ -786,8 +1065,13 @@ class CANedgeXCP:
                     else:
                         new_signal_name = dbc_signal_name
 
+                    if byte_order_flag == '0': 
+                        dbc_start_bit = bit_start + 7  # Point to MSB of the first byte
+                    else:  
+                        dbc_start_bit = bit_start  # Point to LSB of the first byte
+
                     dbc_content.append(
-                        f'  SG_ {new_signal_name} m{pid_counter} : {bit_start}|{bit_length}@{byte_order_flag}{sign} ({scale},{offset}) [{lower_limit}|{upper_limit}] "{unit}"  Logger'
+                        f'  SG_ {new_signal_name} m{pid_counter} : {dbc_start_bit}|{bit_length}@{byte_order_flag}{sign} ({scale},{offset}) [{lower_limit}|{upper_limit}] "{unit}"  Logger'
                     )
                     
                     # Store signal comment (to be added in the next section)

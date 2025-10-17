@@ -1,0 +1,67 @@
+VERSION "CCP_DBC"
+
+NS_ :
+	NS_DESC_
+	CM_
+	BA_DEF_
+	BA_
+	VAL_
+	CAT_DEF_
+	CAT_
+	FILTER
+	BA_DEF_DEF_
+	EV_DATA_
+	ENVVAR_DATA_
+	SGTYPE_
+	SGTYPE_VAL_
+	BA_DEF_SGTYPE_
+	BA_SGTYPE_
+	SIG_TYPE_REF_
+	VAL_TABLE_
+	SIG_GROUP_
+	SIG_VALTYPE_
+	SIGTYPE_VALTYPE_
+	BO_TX_BU_
+	BA_DEF_REL_
+	BA_REL_
+	BA_DEF_DEF_REL_
+	BU_SG_REL_
+	BU_EV_REL_
+	BU_BO_REL_
+	SG_MUL_VAL_
+
+BS_:
+
+BU_: Logger
+
+BO_ 2365581059 DTO: 8 Logger
+  SG_ DTOPID M : 0|8@1+ (1,0) [0|255] ""  Logger
+  SG_ Measurement1 m0 : 15|16@0+ (1,0) [0|3000] ""  Logger
+  SG_ Measurement2 m0 : 31|16@0+ (1,0) [0|3000] ""  Logger
+  SG_ Measurement3 m0 : 47|16@0+ (1,0) [0|3000] ""  Logger
+  SG_ Measurement4 m1 : 15|16@0+ (1,0) [0|3000] ""  Logger
+  SG_ Measurement5 m40 : 15|16@0+ (1,0) [0|3000] ""  Logger
+
+
+CM_ SG_ 2365581059 Measurement1 "Measurement1 | comment";
+CM_ SG_ 2365581059 Measurement2 "Measurement2 | comment";
+CM_ SG_ 2365581059 Measurement3 "Measurement3 | comment";
+CM_ SG_ 2365581059 Measurement4 "Measurement4 | comment";
+CM_ SG_ 2365581059 Measurement5 "Measurement5 | comment";
+
+
+BA_DEF_ "BusType" STRING ;
+BA_DEF_ "ProtocolType" STRING ;
+BA_DEF_ SG_ "SystemSignalLongSymbol" STRING ;
+BA_DEF_ BO_ "VFrameFormat" ENUM "StandardCAN","ExtendedCAN","reserved","reserved","reserved","reserved","reserved","reserved","reserved","reserved","reserved","reserved","reserved","reserved","StandardCAN_FD","ExtendedCAN_FD";
+BA_DEF_ BO_ "MessageIgnore" INT 0 1;
+BA_DEF_ SG_ "SignalIgnore" INT 0 1;
+BA_DEF_DEF_ "BusType" "";
+BA_DEF_DEF_ "ProtocolType" "";
+BA_DEF_DEF_ "VFrameFormat" "ExtendedCAN";
+BA_DEF_DEF_ "MessageIgnore" 0;
+BA_DEF_DEF_ "SignalIgnore" 0;
+BA_DEF_DEF_ "SystemSignalLongSymbol" "";
+BA_ "BusType" "CAN";
+BA_ "ProtocolType" "";
+BA_ "SignalIgnore" SG_ 2365581059 DTOPID 1;
