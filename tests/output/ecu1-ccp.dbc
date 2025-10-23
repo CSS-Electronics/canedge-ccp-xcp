@@ -34,7 +34,7 @@ BS_:
 
 BU_: Logger
 
-BO_ 2365581059 DTO: 8 Logger
+BO_ 2364613675 DTO: 8 Logger
   SG_ DTOPID M : 0|8@1+ (1,0) [0|255] ""  Logger
   SG_ Measurement1 m0 : 15|16@0+ (1,0) [0|3000] ""  Logger
   SG_ Measurement2 m0 : 31|16@0+ (1,0) [0|3000] ""  Logger
@@ -43,11 +43,11 @@ BO_ 2365581059 DTO: 8 Logger
   SG_ Measurement5 m40 : 15|16@0+ (1,0) [0|3000] ""  Logger
 
 
-CM_ SG_ 2365581059 Measurement1 "Measurement1 | comment";
-CM_ SG_ 2365581059 Measurement2 "Measurement2 | comment";
-CM_ SG_ 2365581059 Measurement3 "Measurement3 | comment";
-CM_ SG_ 2365581059 Measurement4 "Measurement4 | comment";
-CM_ SG_ 2365581059 Measurement5 "Measurement5 | comment";
+CM_ SG_ 2364613675 Measurement1 "Measurement1 | comment";
+CM_ SG_ 2364613675 Measurement2 "Measurement2 | comment";
+CM_ SG_ 2364613675 Measurement3 "Measurement3 | comment";
+CM_ SG_ 2364613675 Measurement4 "Measurement4 | comment";
+CM_ SG_ 2364613675 Measurement5 "Measurement5 | comment";
 
 
 BA_DEF_ "BusType" STRING ;
@@ -64,4 +64,4 @@ BA_DEF_DEF_ "SignalIgnore" 0;
 BA_DEF_DEF_ "SystemSignalLongSymbol" "";
 BA_ "BusType" "CAN";
 BA_ "ProtocolType" "";
-BA_ "SignalIgnore" SG_ 2365581059 DTOPID 1;
+BA_ "SignalIgnore" SG_ 2364613675 DTOPID 1;

@@ -5,14 +5,14 @@
   "MAX_DTO": "0x08",
   "WRITE_DAQ_MULTIPLE": false,
   "VERSION": "0x0201",
-  "CAN_ID_MASTER": "0xcffe6fa",
+  "CAN_ID_MASTER": "0xcf12504",
   "CAN_ID_MASTER_EXTENDED": true,
-  "CAN_ID_SLAVE": "0xcffe703",
+  "CAN_ID_SLAVE": "0xcf1242b",
   "CAN_ID_SLAVE_EXTENDED": true,
   "BAUDRATE": 1000000,
   "BYTE_ORDER": "big",
   "ECU_STATION_ADDRESS": "0x0500",
-  "CAN_ID_DTO": "0xcffe703",
+  "CAN_ID_DTO": "0xcf1242b",
   "CAN_ID_DTO_EXTENDED": true,
   "EVENTS": [
     {

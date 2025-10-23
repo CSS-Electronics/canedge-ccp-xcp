@@ -1,0 +1,438 @@
+﻿/* SAMPLE CCP FILE */
+// @@@@ File header based on CANAPE_VERSION XX X XX @@@@ 
+// @@@@ File is generated from XX                   @@@@ 
+
+ASAP2_VERSION 1 61
+/begin PROJECT XYZ100 ""
+
+  /begin MODULE CPP ""
+
+    /begin A2ML
+      block "IF_DATA" taggedunion if_data {
+        "CANAPE_EXT" struct {
+          int;  /* version number */
+          taggedstruct {
+            "LINK_MAP" struct {
+              char[256];  /* segment name */
+              long;  /* base address of the segment */
+              uint;  /* address extension of the segment */
+              uint;  /* flag: address is relative to DS */
+              long;  /* offset of the segment address */
+              uint;  /* datatypValid */
+              uint;  /* enum datatyp */
+              uint;  /* bit offset of the segment */
+            };
+            "DISPLAY" struct {
+              long;  /* display color */
+              double;  /* minimal display value (phys)*/
+              double;  /* maximal display value (phys)*/
+            };
+            "VIRTUAL_CONVERSION" struct {
+              char[256];  /* name of the conversion formula */
+            };
+          };
+        };
+        "CANAPE_MODULE" struct {
+          taggedstruct {
+            ("RECORD_LAYOUT_STEPSIZE" struct {
+              char[256];  /* name of record layout*/
+              uint;  /* stepsize for FNC_VALUES */
+              uint;  /* stepsize for AXIS_PTS_X */
+              uint;  /* stepsize for AXIS_PTS_Y */
+              uint;  /* stepsize for AXIS_PTS_Z */
+              uint;  /* stepsize for AXIS_PTS_4 */
+              uint;  /* stepsize for AXIS_PTS_5 */
+            })*;
+          };
+        };
+        "CANAPE_ADDRESS_UPDATE" taggedstruct {
+          ("EPK_ADDRESS" struct {
+            char[1024];  /* name of the corresponding symbol in MAP file */
+            long;  /* optional address offset */
+          })*;
+          "ECU_CALIBRATION_OFFSET" struct {
+            char[1024];  /* name of the corresponding symbol in MAP file */
+            long;  /* optional address offset */
+          };
+          (block "CALIBRATION_METHOD" taggedunion {
+            "AUTOSAR_SINGLE_POINTERED" struct {
+              char[1024];  /* MAP symbol name for pointer table in RAM */
+              long;  /* optional address offset */
+              taggedstruct {
+                "ORIGINAL_POINTER_TABLE" struct {
+                  char[1024];  /* MAP symbol name for pointer table in FLASH */
+                  long;  /* optional address offset */
+                };
+              };
+            };
+            "InCircuit2" struct {
+              char[1024];  /* MAP symbol name for pointer table in RAM */
+              long;  /* optional address offset */
+              taggedstruct {
+                "ORIGINAL_POINTER_TABLE" struct {
+                  char[1024];  /* MAP symbol name for pointer table in FLASH */
+                  long;  /* optional address offset */
+                };
+                "FLASH_SECTION" struct {
+                  ulong;  /* start address of flash section */
+                  ulong;  /* length of flash section */
+                };
+              };
+            };
+          })*;
+          block "MAP_SYMBOL" taggedstruct {
+            "FIRST" struct {
+              char[1024];  /* symbol name of the corresponding segment in MAP file */
+              long;  /* offset */
+            };
+            "LAST" struct {
+              char[1024];  /* symbol name of the corresponding segment in MAP file */
+              long;  /* offset */
+            };
+            ("ADDRESS_MAPPING_XCP" struct {
+              char[1024];  /* symbol name of source range in MAP file */
+              char[1024];  /* symbol name of destination range in MAP file */
+            })*;
+          };
+          (block "MEMORY_SEGMENT" struct {
+            char[1024];  /* name of the memory segment */
+            taggedstruct {
+              "FIRST" struct {
+                char[1024];  /* symbol name of the corresponding segment in MAP file */
+                long;  /* offset */
+              };
+              "LAST" struct {
+                char[1024];  /* symbol name of the corresponding segment in MAP file */
+                long;  /* offset */
+              };
+              ("ADDRESS_MAPPING_XCP" struct {
+                char[1024];  /* symbol name of source range in MAP file */
+                char[1024];  /* symbol name of destination range in MAP file */
+              })*;
+            };
+          })*;
+        };
+        "CANAPE_GROUP" taggedstruct {
+          block "STRUCTURE_LIST" (char[1024])*;
+        };
+        "ASAP1B_CCP" taggedstruct {
+          (block "SOURCE" struct {
+            struct {
+              char[101];  /* Name of the DAQ-List (data acquisition list), measurement source*/
+              int;  /* Period definition : Basic scaling unit in CSE*/
+              long;  /* Period definition : Rate in Scaling Units*/
+            };
+            taggedstruct {
+              "DISPLAY_IDENTIFIER" char[32];  /* display identifier of DAQ list*/
+              block "QP_BLOB" struct {
+                uint;  /* Number of the DAQ-List 0..n*/
+                taggedstruct {
+                  "LENGTH" uint;  /* Length of the DAQ-Liste, maximum number of the useable ODTs*/
+                  "CAN_ID_VARIABLE" ;  /* CAN-Message-ID is variable*/
+                  "CAN_ID_FIXED" ulong;  /* CAN-Message-ID of the DTOs if fixed*/
+                  ("RASTER" uchar)*;  /* Supported CCP Event Channel Names of this DAQ List*/
+                  ("EXCLUSIVE" int)*;  /* Exclusion of other DAQ-Lists*/
+                  "REDUCTION_ALLOWED" ;  /* Data reduction possible*/
+                  "FIRST_PID" uchar;  /* First Packet ID (PID) of the DAQ List*/
+                };
+              };
+            };  /* optional parameters for this DAQ list  */
+          })*;  /* DAQ list description*/
+          (block "RASTER" struct {
+            char[101];  /* CCP Event Channel Name*/
+            char[9];  /* Short Display Name of the Event Channel Name*/
+            uchar;  /* Event Channel No., used for CCP START_STOP)*/
+            int;  /* Period definition :  basic scaling unit in CSE as defined in ASAP1b*/
+            long;  /* ECU sample rate of the event channel*/
+            taggedstruct {
+              ("EXCLUSIVE" uchar)*;  /* Exclusion of other CCP Event Channels*/
+            };  /* optional parameters*/
+          })*;  /* Event channel description*/
+          (block "EVENT_GROUP" struct {
+            char[101];  /* Event group name*/
+            char[9];  /* Short name for the event group*/
+            taggedstruct {
+              ("RASTER" uchar)*;  /* event channel number*/
+            };  /* list of all event channels beloging to the group*/
+          })*;  /* Group several event channels to form one combined event*/
+          block "SEED_KEY" struct {
+            char[256];  /* Name of the Seed&Key DLL for CAL Priviledge, including file-Extension without path*/
+            char[256];  /* Name of the Seed&Key DLL for DAQ Priviledge, including file-Extension without path*/
+            char[256];  /* Name of the Seed&Key DLL for PGM Priviledge, including file-Extension without path*/
+          };  /* Description of the authentification process*/
+          block "CHECKSUM" struct {
+            char[256];  /* Name of the Checksum DLL representing the ECU Algorithm, including file-Extension without path*/
+          };  /* Description of the checksum calculation process*/
+          block "TP_BLOB" struct {
+            uint;  /* CCP Version, High Byte: Version, Low Byte : subversion (dec.)*/
+            uint;  /* Blob-Version, High Byte: Version, Low Byte : subversion (dec.)*/
+            ulong;  /* CAN-Message ID for 'Transmitting to ECU (CRM)'*/
+            ulong;  /* CAN-Message ID for 'Receiving from ECU (DTM)'*/
+            uint;  /* Logical CCP-Address of the (station address)*/
+            uint;  /* Byte order of Multiple-byte-items 1 = high Byte first, 2 = low byte first*/
+            taggedstruct {
+              block "CAN_PARAM" struct {
+                uint;  /* Quartz freq. of the elec. control unit */
+                uchar;  /* BTR0*/
+                uchar;  /* BTR1*/
+              };  /* CAN parameters*/
+              "BAUDRATE" ulong;  /* Baud rate in Hz.*/
+              "SAMPLE_POINT" uchar;  /* sampling point of time in percent*/
+              "SAMPLE_RATE" uchar;  /* number of samples per Bit (1 oder 3)*/
+              "BTL_CYCLES" uchar;  /* number of BTL-cycles*/
+              "SJW" uchar;  /* SJW-parameter in BTL-cycles*/
+              "SYNC_EDGE" enum {
+                "SINGLE" = 0,
+                "DUAL" = 1
+              };  /* Synchronisation (SINGLE: on falling edge only, DUAL: on falling and rising edge)*/
+              "DAQ_MODE" enum {
+                "ALTERNATING" = 0,
+                "BURST" = 1
+              };  /* mode of cylcic data acquisition (ALTERNATING: ECU is sending one ODT per cycle, BURST: ECU is sending a complete DAQ)*/
+              "BYTES_ONLY" ;  /* ECU supports max. elements of one Byte size otherwise ECU supports different dataTypes*/
+              "RESUME_SUPPORTED" ;  /* ECU supports the Resume function*/
+              "STORE_SUPPORTED" ;  /* ECU supports the Store function*/
+              "CONSISTENCY" enum {
+                "DAQ" = 0,
+                "ODT" = 1
+              };  /* guaranteed consistency (DAQ: consistency of a complete DAQ is guaranteed, ODT: consistency of a complete ODT is guaranteed)*/
+              "ADDRESS_EXTENSION" enum {
+                "DAQ" = 0,
+                "ODT" = 1
+              };  /* ECU supported address extension (DAQ: only one address extension within a DAQ, ODT: only one address extension within an ODT)*/
+              block "CHECKSUM_PARAM" struct {
+                uint;  /* checksum calculation procedure standard types not yet defined, if greater of equal 1000 : manufacturer specific */
+                ulong;  /* Maximum block length used by an ASAP1a-CCP command, for checksum calculation procedure */
+                taggedstruct {
+                  "CHECKSUM_CALCULATION" enum {
+                    "ACTIVE_PAGE" = 0,
+                    "BIT_OR_WITH_OPT_PAGE" = 1
+                  };  /* checksum calculation method*/
+                };  /* optional*/
+              };  /* checksum parameters */
+              (block "DEFINED_PAGES" struct {
+                struct {
+                  uint;  /* Logical No. of the memory page (1,2,..)*/
+                  char[101];  /* Name of the memory page*/
+                  uint;  /* Adress-Extension of the memory page (only Low Byte significant)*/
+                  ulong;  /* Base address of the memory page*/
+                  ulong;  /* Length of the memory page in Bytes*/
+                };  /* fixed parameters*/
+                taggedstruct {
+                  "RAM" ;  /* memory page in RAM*/
+                  "ROM" ;  /* memory page in ROM*/
+                  "FLASH" ;  /* memory page in FLASH*/
+                  "EEPROM" ;  /* memory page in EEPROM*/
+                  "RAM_INIT_BY_ECU" ;  /* memory page is initialised by ECU start-up*/
+                  "RAM_INIT_BY_TOOL" ;  /* RAM- memory page is initialised by the MCS*/
+                  "AUTO_FLASH_BACK" ;  /* RAM memory page is automatically flashed back*/
+                  "FLASH_BACK" ;  /* feature available to flash back the RAM memory page*/
+                  "DEFAULT" ;  /* memory page is standard (fallback mode)*/
+                };  /* optional parameters */
+              })*;  /* memory page description */
+              ("OPTIONAL_CMD" uint)*;  /* CCP-Code of the optional command available*/
+            };  /* optional parameters */
+          };
+          ("ADDR_MAPPING" struct {
+            ulong;  /* from*/
+            ulong;  /* to*/
+            ulong;  /* length*/
+          })*;  /* address mapping for memory segment*/
+          "DP_BLOB" struct {
+            uint;  /* Address extension of the calibration data (only Low Byte significant)*/
+            ulong;  /* Base address of the calibration data*/
+            ulong;  /* Number of Bytes belonging to the calibration data */
+          };  /* for CHARACTERISTIC and AXIS_PTS and MEMORY_LAYOUT*/
+          "KP_BLOB" struct {
+            uint;  /* Address extension of the online data (only Low Byte significant)*/
+            ulong;  /* Base address of the online data  */
+            ulong;  /* Number of Bytes belonging to the online data (1,2 or 4)*/
+            taggedstruct {
+              ("RASTER" uchar)*;  /* Array of event channel initialization values*/
+            };
+          };  /* for MEASUREMENT*/
+        };
+      };
+    /end A2ML
+
+    /begin MOD_PAR ""
+    /end MOD_PAR
+
+    /begin MOD_COMMON ""
+      BYTE_ORDER MSB_FIRST
+      ALIGNMENT_BYTE 1
+      ALIGNMENT_WORD 2
+      ALIGNMENT_LONG 4
+      ALIGNMENT_FLOAT32_IEEE 4
+      ALIGNMENT_FLOAT64_IEEE 8
+      ALIGNMENT_INT64 8
+    /end MOD_COMMON
+
+    /begin IF_DATA ASAP1B_CCP
+      /begin SOURCE
+        "DAQ List"
+        0
+        0
+        /begin QP_BLOB
+          0x00
+          LENGTH 0x28
+          FIRST_PID 0x00
+        /end QP_BLOB
+      /end SOURCE
+      /begin SOURCE
+        "DAQ List"
+        0
+        0
+        /begin QP_BLOB
+          0x01
+          LENGTH 0x28
+          FIRST_PID 0x28
+        /end QP_BLOB
+      /end SOURCE
+      /begin SOURCE
+        "DAQ List"
+        0
+        0
+        /begin QP_BLOB
+          0x02
+          LENGTH 0x28
+          FIRST_PID 0x50
+        /end QP_BLOB
+      /end SOURCE
+      /begin RASTER
+        "HST"
+        "HST"
+        0x01
+        3
+        5
+      /end RASTER
+      /begin RASTER
+        "MST"
+        "MST"
+        0x02
+        3
+        20
+      /end RASTER
+      /begin RASTER
+        "EVENT"
+        "EVENT"
+        0x0E
+        1000
+        0
+      /end RASTER
+      /begin RASTER
+        "cyclic"
+        "cyclic"
+        0x0F
+        1000
+        0
+      /end RASTER
+      /begin SEED_KEY
+        "seedkey1.DLL"
+        "seedkey1.DLL"
+        "seedkey1.DLL"
+      /end SEED_KEY
+      /begin TP_BLOB
+        0x0201
+        0x0206
+        0x8CF12504
+        0x8CF1242B
+        0x0500
+        0x01
+        DAQ_MODE BURST
+        CONSISTENCY ODT
+        ADDRESS_EXTENSION DAQ
+        BYTES_ONLY
+        OPTIONAL_CMD 0x05
+        OPTIONAL_CMD 0x08
+        OPTIONAL_CMD 0x0F
+        OPTIONAL_CMD 0x12
+        OPTIONAL_CMD 0x13
+        OPTIONAL_CMD 0x23
+        OPTIONAL_CMD 0x22
+        BAUDRATE 0x0F4240
+        SAMPLE_POINT 0x4B
+        SAMPLE_RATE 0x01
+        BTL_CYCLES 0x08
+        SJW 0x02
+        SYNC_EDGE SINGLE
+      /end TP_BLOB
+    /end IF_DATA
+
+    /begin IF_DATA CANAPE_ADDRESS_UPDATE
+    /end IF_DATA
+
+    /begin MEASUREMENT Measurement1 "comment"
+      UWORD REVOLUTION_SCL 0 0 0 3000
+      BYTE_ORDER MSB_FIRST
+      ECU_ADDRESS 0x500186A3
+      FORMAT "%.3"
+      SYMBOL_LINK "Measurement1_Out.spd" 0
+      /begin IF_DATA CANAPE_EXT
+        100
+        LINK_MAP "Measurement1_Out.spd" 0x500186A3 0 0 0 1 0xDF 0
+        DISPLAY 0x0 0 3000
+      /end IF_DATA
+    /end MEASUREMENT
+
+    /begin MEASUREMENT Measurement2 "comment"
+      UWORD REVOLUTION_SCL 0 0 0 3000
+      BYTE_ORDER MSB_FIRST
+      ECU_ADDRESS 0x5001378B
+      FORMAT "%.3"
+      SYMBOL_LINK "Measurement2_Out.spd" 0
+      /begin IF_DATA CANAPE_EXT
+        100
+        LINK_MAP "Measurement2_Out.spd" 0x5001378B 0 0 0 1 0xDF 0
+        DISPLAY 0x0 0 3000
+      /end IF_DATA
+    /end MEASUREMENT
+
+    /begin MEASUREMENT Measurement3 "comment"
+      UWORD REVOLUTION_SCL 0 0 0 3000
+      BYTE_ORDER MSB_FIRST
+      ECU_ADDRESS 0x5001471F
+      FORMAT "%.3"
+      SYMBOL_LINK "Measurement3_Out.spd" 0
+      /begin IF_DATA CANAPE_EXT
+        100
+        LINK_MAP "Measurement3_Out.spd" 0x5001471F 0 0 0 1 0xDF 0
+        DISPLAY 0x0 0 3000
+      /end IF_DATA
+    /end MEASUREMENT
+
+    /begin MEASUREMENT Measurement4 "comment"
+      UWORD REVOLUTION_SCL 0 0 0 3000
+      BYTE_ORDER MSB_FIRST
+      ECU_ADDRESS 0x50012C61
+      FORMAT "%.3"
+      SYMBOL_LINK "Measurement4_Out.spd" 0
+      /begin IF_DATA CANAPE_EXT
+        100
+        LINK_MAP "Measurement4_Out.spd" 0x50012C61 0 0 0 1 0xDF 0
+        DISPLAY 0x0 0 3000
+      /end IF_DATA
+    /end MEASUREMENT
+
+    /begin MEASUREMENT Measurement5 "comment"
+      UWORD REVOLUTION_SCL 0 0 0 3000
+      BYTE_ORDER MSB_FIRST
+      ECU_ADDRESS 0x50015D44
+      FORMAT "%.3"
+      SYMBOL_LINK "Measurement5_Out.spd" 0
+      /begin IF_DATA CANAPE_EXT
+        100
+        LINK_MAP "Measurement5_Out.spd" 0x50015D44 0 0 0 1 0xDF 0
+        DISPLAY 0x0 0 3000
+      /end IF_DATA
+    /end MEASUREMENT
+
+
+    /begin COMPU_METHOD REVOLUTION_SCL ""
+      IDENTICAL "%.0" "RPM   "
+    /end COMPU_METHOD
+
+	
+  /end MODULE
+
+/end PROJECT
