@@ -1,0 +1,5 @@
+temp/*
+test-xcp-temp.bat
+a2L-troubleshooting.json
+*_status.csv
+__pycache__/*

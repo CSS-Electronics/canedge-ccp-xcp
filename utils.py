@@ -247,12 +247,20 @@ class CANedgeDAQ:
                 # Attempt to extract PROTOCOL_LAYER and EVENT sections from XCP_ON_CAN sub section - otherwise default to general XCP section
                 try: 
                     protocol_layer = xcp_on_can["PROTOCOL_LAYER"]["DataParams"]
-                    events = xcp_on_can["DAQ"]["EVENT"] 
                 except:
                     protocol_layer = xcp["PROTOCOL_LAYER"]["DataParams"]
-                    events = xcp["DAQ"]["EVENT"] 
-                    print("WARNING: Unable to extract PROTOCOL_LAYER and DAQ from XCP_ON_CAN - extracting instead from general XCP settings")
+                    print("WARNING: Unable to extract PROTOCOL_LAYER from XCP_ON_CAN - extracting instead from general XCP settings")
+                    with open('a2L-troubleshooting.json', 'w') as f:
+                        json.dump(xcp, f, indent=4)
                     
+                try:
+                    events = xcp_on_can["DAQ"]["EVENT"] 
+                except: 
+                    events = xcp["DAQ"]["EVENT"] 
+                    print("WARNING: Unable to extract EVENT from XCP_ON_CAN - extracting instead from general XCP settings")
+                    with open('a2L-troubleshooting.json', 'w') as f:
+                        json.dump(xcp, f, indent=4)
+
                 # Add event data to list
                 event_data = []
                 for event in events:
@@ -489,7 +497,7 @@ class CANedgeDAQ:
         with self.signal_file.open(newline='', encoding='utf-8') as csvfile:
             reader = csv.reader(csvfile, delimiter=";")
             for row in reader:
-                if len(row) < 2 or not row[0].strip() or "[" in row[0]:  # Skip headers and empty rows
+                if len(row) < 2 or not row[0].strip():  # Skip empty rows
                     continue
                 name, event = row[0].strip(), row[1].strip()
                 csv_mapping[name] = event  # Store event as a string
