@@ -242,8 +242,14 @@ class CANedgeDAQ:
                 a2l_params["CAN_ID_MASTER"], a2l_params["CAN_ID_MASTER_EXTENDED"] = self.extract_can_id(self.get_next_value(xcp_on_can["DataParams"], "CAN_ID_MASTER"))
                 a2l_params["CAN_ID_SLAVE"], a2l_params["CAN_ID_SLAVE_EXTENDED"] = self.extract_can_id(self.get_next_value(xcp_on_can["DataParams"], "CAN_ID_SLAVE"))
                 a2l_params["VERSION"] = xcp_on_can["DataParams"][0]
-                a2l_params["BAUDRATE"] = self.force_int(self.get_next_value(xcp_on_can["DataParams"], "BAUDRATE")) 
+                a2l_params["BAUDRATE"] = self.force_int(self.get_next_value(xcp_on_can["DataParams"], "BAUDRATE"))
                 
+                # Check for MAX_DLC_REQUIRED flag in XCP_ON_CAN DataParams
+                if "MAX_DLC_REQUIRED" in xcp_on_can["DataParams"]:
+                    a2l_params["MAX_DLC_REQUIRED"] = True
+                else:
+                    a2l_params["MAX_DLC_REQUIRED"] = False 
+         
                 # Attempt to extract PROTOCOL_LAYER and EVENT sections from XCP_ON_CAN sub section - otherwise default to general XCP section
                 try: 
                     protocol_layer = xcp_on_can["PROTOCOL_LAYER"]["DataParams"]
@@ -789,6 +795,16 @@ class CANedgeDAQ:
         byte_order = a2l_params['BYTE_ORDER'] 
         max_cto = min(int(a2l_params['MAX_CTO'], 16),64)
         max_payload_size = 64 - 1  # Max CAN FD frame size minus 1 byte for command ID
+        max_dlc_required = a2l_params.get('MAX_DLC_REQUIRED', False)
+        
+        # Helper function to pad data to MAX_CTO if MAX_DLC_REQUIRED is True
+        def pad_cto(data):
+            if max_dlc_required:
+                current_length = len(data) // 2  # Convert hex string to byte count
+                if current_length < max_cto:
+                    padding = "00" * (max_cto - current_length)
+                    return data + padding
+            return data
         
         # Hardcoded values
         address_extension = "00"
@@ -798,21 +814,21 @@ class CANedgeDAQ:
         dummy_byte = "00"
         
         # Generic initialization commands
-        daq_frames.append({"Name": "CONNECT", "DATA": "FF00"})
-        daq_frames.append({"Name": "GET_STATUS", "DATA": "FD"})
-        daq_frames.append({"Name": "FREE_DAQ", "DATA": "D6"})
+        daq_frames.append({"Name": "CONNECT", "DATA": pad_cto("FF00")})
+        daq_frames.append({"Name": "GET_STATUS", "DATA": pad_cto("FD")})
+        daq_frames.append({"Name": "FREE_DAQ", "DATA": pad_cto("D6")})
         
         # AL_DAQ (0xD5 commands)
         daq_lists = sorted(set(signal['DAQ_LIST_NUMBER'] for signal in signals_grouped))
         daq_count = len(daq_lists).to_bytes(2, byte_order).hex().upper()
-        daq_frames.append({"Name": "AL_DAQ", "DATA": f"D500{daq_count}"})
+        daq_frames.append({"Name": "AL_DAQ", "DATA": pad_cto(f"D500{daq_count}")})
         
         # AL_ODT and AL_ODT_ENTRY (0xD4 commands)
         for daq_list in daq_lists:
             odts = sorted(set(signal['ODT_NUMBER'] for signal in signals_grouped if signal['DAQ_LIST_NUMBER'] == daq_list))
             daq_number = int(daq_list, 16).to_bytes(2, byte_order).hex().upper()
             
-            daq_frames.append({"Name": f"AL_ODT_{daq_list}", "DATA": f"D400{daq_number}{len(odts):02X}"})
+            daq_frames.append({"Name": f"AL_ODT_{daq_list}", "DATA": pad_cto(f"D400{daq_number}{len(odts):02X}")})
         
         # AL_ODT_ENTRY (0xD3 commands)
         for daq_list in daq_lists:
@@ -823,7 +839,7 @@ class CANedgeDAQ:
                 entries = [signal for signal in signals_grouped if signal['DAQ_LIST_NUMBER'] == daq_list and signal['ODT_NUMBER'] == odt]
                 odt_number = int(odt, 16).to_bytes(1, 'big').hex().upper()
                 
-                daq_frames.append({"Name": f"AL_ODT_ENT_{odt}", "DATA": f"D300{daq_number}{odt_number}{len(entries):02X}"})
+                daq_frames.append({"Name": f"AL_ODT_ENT_{odt}", "DATA": pad_cto(f"D300{daq_number}{odt_number}{len(entries):02X}")})
         
         # SET_DAQ_PTR once per ODT, followed by multiple WRITE_DAQ or WRITE_DAQ_MULTIPLE commands
         for daq_list in daq_lists:
@@ -835,7 +851,7 @@ class CANedgeDAQ:
                 daq_number = int(daq_list, 16).to_bytes(2, byte_order).hex().upper()
                 odt_number = int(odt, 16).to_bytes(1, 'big').hex().upper()
                 
-                daq_frames.append({"Name": "SET_DAQ_PTR", "DATA": f"E200{daq_number}{odt_number}00"})
+                daq_frames.append({"Name": "SET_DAQ_PTR", "DATA": pad_cto(f"E200{daq_number}{odt_number}00")})
                 
                 if max_cto == 64:
                     frame_data = []
@@ -845,18 +861,28 @@ class CANedgeDAQ:
                         signal_entry = f"{bit_offset}{length:02X}{ecu_address}{address_extension}{dummy_byte}"
                         
                         if len("".join(frame_data) + signal_entry) // 2 > max_payload_size:
-                            daq_frames.append({"Name": "WRITE_DAQ_MULTI", "DATA": f"C7{len(frame_data):02X}{''.join(frame_data)}".ljust(128, '0')[:128]})
+                            data = f"C7{len(frame_data):02X}{''.join(frame_data)}"
+                            if max_dlc_required:
+                                data = pad_cto(data)
+                            else:
+                                data = data.ljust(128, '0')[:128]
+                            daq_frames.append({"Name": "WRITE_DAQ_MULTI", "DATA": data})
                             frame_data = []
                         
                         frame_data.append(signal_entry)
                     
                     if frame_data:
-                        daq_frames.append({"Name": "WRITE_DAQ_MULTI", "DATA": f"C7{len(frame_data):02X}{''.join(frame_data)}".ljust(128, '0')[:128]})
+                        data = f"C7{len(frame_data):02X}{''.join(frame_data)}"
+                        if max_dlc_required:
+                            data = pad_cto(data)
+                        else:
+                            data = data.ljust(128, '0')[:128]
+                        daq_frames.append({"Name": "WRITE_DAQ_MULTI", "DATA": data})
                 else:
                     for idx, signal in enumerate(odt_signals):
                         length = int(signal['Length']) 
                         ecu_address = int(signal['ECU_ADDRESS'], 16).to_bytes(4, byte_order).hex().upper()                        
-                        daq_frames.append({"Name": f"WRITE_DAQ_0x{idx:02X}", "DATA": f"E1FF{length:02X}{address_extension}{ecu_address}"})
+                        daq_frames.append({"Name": f"WRITE_DAQ_0x{idx:02X}", "DATA": pad_cto(f"E1FF{length:02X}{address_extension}{ecu_address}")})
 
         # SET_DAQ_LIST_MODE (now with correct priority lookup)
         for daq_list in daq_lists:
@@ -872,15 +898,15 @@ class CANedgeDAQ:
             daq_number = int(daq_list, 16).to_bytes(2, byte_order).hex().upper()
             event_channel_hex = event_channel.to_bytes(2, byte_order).hex().upper()
             
-            daq_frames.append({"Name": "SET_DAQ_LIST_MOD", "DATA": f"E000{daq_number}{event_channel_hex}{prescaler}{event_priority}"})
+            daq_frames.append({"Name": "SET_DAQ_LIST_MOD", "DATA": pad_cto(f"E000{daq_number}{event_channel_hex}{prescaler}{event_priority}")})
 
         # START_STOP_DAQ_LIST
         for daq_list in daq_lists:
             daq_number = int(daq_list, 16).to_bytes(2, byte_order).hex().upper()
-            daq_frames.append({"Name": "START_STOP_DAQ", "DATA": f"DE{start_stop_mode}{daq_number}"})
+            daq_frames.append({"Name": "START_STOP_DAQ", "DATA": pad_cto(f"DE{start_stop_mode}{daq_number}")})
 
         # START_STOP_SYNC
-        daq_frames.append({"Name": "START_STOP_SYNCH", "DATA": "DD01"})
+        daq_frames.append({"Name": "START_STOP_SYNCH", "DATA": pad_cto("DD01")})
         
         return daq_frames
 
