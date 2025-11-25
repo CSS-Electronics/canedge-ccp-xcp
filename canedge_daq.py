@@ -47,7 +47,8 @@ if __name__ == "__main__":
         "frame_spacing": 10,     # ms between each CTO
         "max_frames": 224,       # limit based on CANedge FW 01.09.01+
         "max_data_bytes": 4096,  # limit based on CANedge FW 01.09.01+
-        "shorten_signals": True  # shorten DBC signal names to 32 chars
+        "shorten_signals": True, # shorten DBC signal names to 32 chars
+        "pack_consecutive_bytes": True  # optimize consecutive measurements into fewer WRITE_DAQ commands
     }
     
     # Initialize CANedgeDAQ Class 
@@ -74,7 +75,8 @@ if __name__ == "__main__":
     # a2l_params["MAX_DTO"] = "0x0040"
     
     print(f"\nRequested signals: {len(user_signals)} | Available signals: {len(a2l_signals_all)} | Matched signals: {len(signals)} ({math.floor((len(signals)/len(user_signals))*100)}%)")
-    print(f"A2L settings: MAX_CTO: {int(a2l_params['MAX_CTO'],16)} | MAX_DTO: {int(a2l_params['MAX_DTO'],16)} | BYTE_ORDER: {a2l_params['BYTE_ORDER']} | CAN_FD: {a2l_params['CAN_FD']}\n")
+    print(f"A2L settings: MAX_CTO: {int(a2l_params['MAX_CTO'],16)} | MAX_DTO: {int(a2l_params['MAX_DTO'],16)} | BYTE_ORDER: {a2l_params['BYTE_ORDER']} | CAN_FD: {a2l_params['CAN_FD']}")
+    print(f"              MAX_DLC_REQUIRED: {a2l_params.get('MAX_DLC_REQUIRED', False)} | pack_consecutive_bytes: {settings['pack_consecutive_bytes']}\n")
 
     # Generate status CSV showing which signals were matched/not matched
     status_csv_path = cdaq.create_status_csv(user_signals)
@@ -84,9 +86,9 @@ if __name__ == "__main__":
 
     # Construct dynamic DAQ initialization CAN frames
     if protocol == "xcp":
-        daq_frames = cdaq.create_daq_frames_xcp(signals_grouped, a2l_params)
+        daq_frames = cdaq.create_daq_frames_xcp(signals_grouped, a2l_params, settings)
     elif protocol == "ccp":
-        daq_frames = cdaq.create_daq_frames_ccp(signals_grouped, a2l_params)
+        daq_frames = cdaq.create_daq_frames_ccp(signals_grouped, a2l_params, settings)
 
     # Create and save outputs
     cdaq.create_transmit_list(daq_frames, a2l_params, settings, output_transmit)

@@ -299,7 +299,7 @@ class CANedgeDAQ:
                 if a2l_params["CAN_FD"] == False:
                     a2l_params["MAX_DTO"] = "0x0008"
                 else:
-                    a2l_params["MAX_DTO"] = "0x0040" 
+                    a2l_params["MAX_DTO"] = "0x0040"
                                     
             return a2l_params
             
@@ -677,7 +677,7 @@ class CANedgeDAQ:
 
     # ----------------------------------
     # function for creating the actual DAQ initialization CAN frames
-    def create_daq_frames_ccp(self, signals_grouped, a2l_params):
+    def create_daq_frames_ccp(self, signals_grouped, a2l_params, settings):
         daq_frames = []
         byte_order = a2l_params['BYTE_ORDER'] 
         max_cto = min(int(a2l_params['MAX_CTO'], 16),8)
@@ -790,12 +790,13 @@ class CANedgeDAQ:
 
     # ----------------------------------
     # function for creating the actual DAQ initialization CAN frames
-    def create_daq_frames_xcp(self, signals_grouped, a2l_params):
+    def create_daq_frames_xcp(self, signals_grouped, a2l_params, settings):
         daq_frames = []
         byte_order = a2l_params['BYTE_ORDER'] 
         max_cto = min(int(a2l_params['MAX_CTO'], 16),64)
         max_payload_size = 64 - 1  # Max CAN FD frame size minus 1 byte for command ID
         max_dlc_required = a2l_params.get('MAX_DLC_REQUIRED', False)
+        pack_consecutive_bytes = settings.get('pack_consecutive_bytes', False)
         
         # Helper function to pad data to MAX_CTO if MAX_DLC_REQUIRED is True
         def pad_cto(data):
@@ -805,6 +806,50 @@ class CANedgeDAQ:
                     padding = "00" * (max_cto - current_length)
                     return data + padding
             return data
+        
+        # Helper function to group consecutive signals for optimization
+        def group_consecutive_signals(signals):
+            """Groups consecutive signals that can be packed into a single WRITE_DAQ command"""
+            if not pack_consecutive_bytes or len(signals) == 0:
+                # Return each signal as its own group
+                return [[sig] for sig in signals]
+            
+            groups = []
+            current_group = [signals[0]]
+            
+            for i in range(1, len(signals)):
+                prev_signal = signals[i-1]
+                curr_signal = signals[i]
+                
+                # Check if signals are consecutive
+                prev_addr = int(prev_signal['ECU_ADDRESS'], 16)
+                curr_addr = int(curr_signal['ECU_ADDRESS'], 16)
+                prev_length = int(prev_signal['Length'])
+                
+                # Check if address extension matches (using ADDRESS_EXTENSION if available)
+                prev_addr_ext = prev_signal.get('ADDRESS_EXTENSION', '0x00')
+                curr_addr_ext = curr_signal.get('ADDRESS_EXTENSION', '0x00')
+                
+                # Check if event channel matches
+                prev_event = prev_signal.get('EventConfigured', None)
+                curr_event = curr_signal.get('EventConfigured', None)
+                
+                # Signals are consecutive if:
+                # 1. Same address extension
+                # 2. Same event channel
+                # 3. Current address = Previous address + Previous length
+                if (prev_addr_ext == curr_addr_ext and 
+                    prev_event == curr_event and
+                    prev_addr + prev_length == curr_addr):
+                    current_group.append(curr_signal)
+                else:
+                    # Not consecutive, start new group
+                    groups.append(current_group)
+                    current_group = [curr_signal]
+            
+            # Add the last group
+            groups.append(current_group)
+            return groups
         
         # Hardcoded values
         address_extension = "00"
@@ -839,7 +884,11 @@ class CANedgeDAQ:
                 entries = [signal for signal in signals_grouped if signal['DAQ_LIST_NUMBER'] == daq_list and signal['ODT_NUMBER'] == odt]
                 odt_number = int(odt, 16).to_bytes(1, 'big').hex().upper()
                 
-                daq_frames.append({"Name": f"AL_ODT_ENT_{odt}", "DATA": pad_cto(f"D300{daq_number}{odt_number}{len(entries):02X}")})
+                # Count actual ODT entries (grouped if consecutive packing is enabled)
+                grouped_entries = group_consecutive_signals(entries)
+                entry_count = len(grouped_entries)
+                
+                daq_frames.append({"Name": f"AL_ODT_ENT_{odt}", "DATA": pad_cto(f"D300{daq_number}{odt_number}{entry_count:02X}")})
         
         # SET_DAQ_PTR once per ODT, followed by multiple WRITE_DAQ or WRITE_DAQ_MULTIPLE commands
         for daq_list in daq_lists:
@@ -879,10 +928,25 @@ class CANedgeDAQ:
                             data = data.ljust(128, '0')[:128]
                         daq_frames.append({"Name": "WRITE_DAQ_MULTI", "DATA": data})
                 else:
-                    for idx, signal in enumerate(odt_signals):
-                        length = int(signal['Length']) 
-                        ecu_address = int(signal['ECU_ADDRESS'], 16).to_bytes(4, byte_order).hex().upper()                        
-                        daq_frames.append({"Name": f"WRITE_DAQ_0x{idx:02X}", "DATA": pad_cto(f"E1FF{length:02X}{address_extension}{ecu_address}")})
+                    # Group consecutive signals if optimization is enabled
+                    signal_groups = group_consecutive_signals(odt_signals)
+                    
+                    entry_idx = 0
+                    for group in signal_groups:
+                        if len(group) == 1:
+                            # Single signal - use original logic
+                            signal = group[0]
+                            length = int(signal['Length']) 
+                            ecu_address = int(signal['ECU_ADDRESS'], 16).to_bytes(4, byte_order).hex().upper()                        
+                            daq_frames.append({"Name": f"WRITE_DAQ_0x{entry_idx:02X}", "DATA": pad_cto(f"E1FF{length:02X}{address_extension}{ecu_address}")})
+                            entry_idx += 1
+                        else:
+                            # Multiple consecutive signals - combine into single WRITE_DAQ
+                            first_signal = group[0]
+                            combined_length = sum(int(sig['Length']) for sig in group)
+                            ecu_address = int(first_signal['ECU_ADDRESS'], 16).to_bytes(4, byte_order).hex().upper()
+                            daq_frames.append({"Name": f"WRITE_DAQ_0x{entry_idx:02X}", "DATA": pad_cto(f"E1FF{combined_length:02X}{address_extension}{ecu_address}")})
+                            entry_idx += 1
 
         # SET_DAQ_LIST_MODE (now with correct priority lookup)
         for daq_list in daq_lists:
@@ -1058,6 +1122,21 @@ class CANedgeDAQ:
         signal_comments = []  # Store signal comments
         signal_floats = []    # Store signal float meta data
 
+        # Pre-scan all signals to identify base name conflicts if shortening is enabled
+        base_name_conflicts = {}  # Maps base_name -> list of full signal names
+        if settings.get("shorten_signals", False):
+            for signal in signals_grouped:
+                original_signal_name = signal['Name']
+                dbc_signal_name = original_signal_name.replace('.', '_')
+                base_name = dbc_signal_name[:29]
+                if base_name not in base_name_conflicts:
+                    base_name_conflicts[base_name] = []
+                base_name_conflicts[base_name].append(dbc_signal_name)
+        
+        # Identify which base names need suffixes (those with multiple signals)
+        base_names_needing_suffix = {base_name for base_name, names in base_name_conflicts.items() if len(names) > 1}
+        base_name_counters = {base_name: 0 for base_name in base_names_needing_suffix}
+
         for daq_list in sorted(set(signal['DAQ_LIST_NUMBER'] for signal in signals_grouped)):
 
             # For CCP, each DAQ list has a 'first PID' that we should start from when shifting to the DAQ list
@@ -1087,14 +1166,14 @@ class CANedgeDAQ:
                     # Handle signal name shortening and uniqueness
                     if settings.get("shorten_signals", False):
                         base_name = dbc_signal_name[:29]  # First 29 characters
-                        if base_name not in signal_name_map:
-                            new_signal_name = base_name  # Use directly if unique
-                        else:
-                            suffix = 0
+                        if base_name in base_names_needing_suffix:
+                            # This base name has conflicts, so add suffix starting from _00
+                            suffix = base_name_counters[base_name]
                             new_signal_name = f"{base_name}_{suffix:02d}"
-                            while new_signal_name in signal_name_map:
-                                suffix += 1
-                                new_signal_name = f"{base_name}_{suffix:02d}"
+                            base_name_counters[base_name] += 1
+                        else:
+                            # No conflicts, use base name directly
+                            new_signal_name = base_name
                         signal_name_map[new_signal_name] = dbc_signal_name
                     else:
                         new_signal_name = dbc_signal_name
