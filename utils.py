@@ -1127,7 +1127,7 @@ class CANedgeDAQ:
         if settings.get("shorten_signals", False):
             for signal in signals_grouped:
                 original_signal_name = signal['Name']
-                dbc_signal_name = original_signal_name.replace('.', '_')
+                dbc_signal_name = original_signal_name.replace('.', '_').replace('[', '_').replace(']', '_')
                 base_name = dbc_signal_name[:29]
                 if base_name not in base_name_conflicts:
                     base_name_conflicts[base_name] = []
@@ -1153,7 +1153,7 @@ class CANedgeDAQ:
                 bit_start = 8  # Start after PID (1st byte)
                 for signal in odt_signals:
                     original_signal_name = signal['Name']
-                    dbc_signal_name = original_signal_name.replace('.', '_')  # Convert "." to "_" for DBC compatibility
+                    dbc_signal_name = original_signal_name.replace('.', '_').replace('[', '_').replace(']', '_')  # Convert ".", "[", "]" to "_" for DBC compatibility
                     bit_length = signal['Length'] * 8
                     sign = '+' if signal['Signage'] == 'unsigned' else '-'
                     lower_limit = signal['LowerLimit']
