@@ -75,21 +75,57 @@ class CANedgeDAQ:
             return hex(can_id & 0x7FF), False  # Extract 11-bit ID
     
     # ----------------------------------
+    # function for cleaning A2L files before parsing (fixes known syntax issues)
+    def clean_a2l_file(self, a2l_file_path):
+        import os, re
+
+        # Known problematic patterns: (regex_pattern, replacement)
+        replacements = [
+            (rb'"\\\\"', b'"BS"'),  # "\\" (backslash in quoted string) -> "BS"
+        ]
+
+        with open(a2l_file_path, 'rb') as f:
+            content = f.read()
+
+        modified = False
+        for pattern, replacement in replacements:
+            new_content = re.sub(pattern, replacement, content)
+            if new_content != content:
+                modified = True
+                content = new_content
+
+        if not modified:
+            return a2l_file_path  # No changes needed, use original file
+
+        # Write cleaned content to a temporary file
+        base, ext = os.path.splitext(a2l_file_path)
+        cleaned_path = f"{base}_cleaned{ext}"
+        with open(cleaned_path, 'wb') as f:
+            f.write(content)
+
+        print(f"INFO: Cleaned A2L file created: {cleaned_path}")
+        return cleaned_path
+
+    # ----------------------------------
     # function for loading A2L files into dictionary
     def load_a2l_files(self):
         from a2lparser.a2lparser import A2LParser
         from a2lparser.a2lparser_exception import A2LParserException
-        import sys
+        import sys, os
 
         sys.stdout.reconfigure(encoding="utf-8")
 
         a2l_dict = {}
+        cleaned_files = []  # Track temp files for cleanup
 
         try:
             parser = A2LParser(log_level="INFO")
             for a2l_file in self.a2l_files:
                 a2l_file = str(a2l_file)  # Ensure it's a string path
-                parsed_data = parser.parse_file(a2l_file)
+                cleaned_file = self.clean_a2l_file(a2l_file)
+                if cleaned_file != a2l_file:
+                    cleaned_files.append(cleaned_file)
+                parsed_data = parser.parse_file(cleaned_file)
 
                 # Merge parsed_data into a2l_dict
                 a2l_dict.update(parsed_data)  # parsed_data is already a dictionary
@@ -99,6 +135,13 @@ class CANedgeDAQ:
         except A2LParserException as ex:
             print(f"Error parsing A2L file: {ex}")
             return {}
+        finally:
+            # Clean up temporary files
+            for f in cleaned_files:
+                try:
+                    os.remove(f)
+                except OSError:
+                    pass
  
     # ----------------------------------
     # function for identifying the protocol (CCP or XCP) from A2L file
