@@ -1033,7 +1033,7 @@ class CANedgeDAQ:
         
         frame_format_default = 0
         brs = 0
-        if a2l_params["CAN_FD_DATA_TRANSFER_BAUDRATE"] != None and a2l_params["CAN_FD_DATA_TRANSFER_BAUDRATE"] != a2l_params["BAUDRATE"]:
+        if a2l_params["CAN_FD"] and a2l_params["CAN_FD_DATA_TRANSFER_BAUDRATE"] != None and a2l_params["CAN_FD_DATA_TRANSFER_BAUDRATE"] != a2l_params["BAUDRATE"]:
             frame_format_default = 1
             brs = 1
         
