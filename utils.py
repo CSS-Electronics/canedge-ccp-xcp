@@ -228,11 +228,21 @@ class CANedgeDAQ:
                     sources = ccp["SOURCE"] if isinstance(ccp["SOURCE"], list) else [ccp["SOURCE"]]
                     for source in sources:
                         if "QP_BLOB" in source:
+                            # Parse by keyword (not position) as optional tags may precede LENGTH/FIRST_PID
                             qp_blob = source["QP_BLOB"]["DataParams"]
+                            daq_id = qp_blob[0]  # DAQ list number is always the first element
+                            length = self.get_next_value(qp_blob, "LENGTH")
+                            first_pid = self.get_next_value(qp_blob, "FIRST_PID")
+                            if length is None:
+                                print(f"WARNING: LENGTH not found for DAQ list {daq_id} - ODT capacity check disabled")
+                                length = "0xFF"
+                            if first_pid is None:
+                                print(f"WARNING: FIRST_PID not found for DAQ list {daq_id} - defaulting to 0x00")
+                                first_pid = "0x00"
                             daq_lists.append({
-                                "Id": qp_blob[0],
-                                "Length": qp_blob[2],
-                                "FirstPID": qp_blob[4]
+                                "Id": daq_id,
+                                "Length": length,
+                                "FirstPID": first_pid
                             })
                 a2l_params["DAQ_LISTS"] = daq_lists
 
@@ -764,7 +774,7 @@ class CANedgeDAQ:
 
             # GET_DAQ_SIZE (clear the DAQ list before writing elements)
             daq_number = int(daq_list, 16).to_bytes(1, 'big').hex().upper()
-            daq_frames.append({"Name": f"GET_DAQ_SIZE_{daq_number}", "DATA": f"14{ctr_hex(ctr)}{daq_number}AA{can_id_dto.to_bytes(4,'big').hex().upper()}"})      
+            daq_frames.append({"Name": f"GET_DAQ_SIZE_{daq_number}", "DATA": f"14{ctr_hex(ctr)}{daq_number}AA{can_id_dto.to_bytes(4,byte_order).hex().upper()}"})
             ctr += 1
 
             for odt in odts:
@@ -813,7 +823,7 @@ class CANedgeDAQ:
 
             event_channel = int(next(s for s in signals_grouped if s['DAQ_LIST_NUMBER'] == daq_list)['EventConfigured'], 16)
             event_channel_hex = event_channel.to_bytes(1, byte_order).hex().upper()
-            event_scaler_hex = "0001"  # Default prescaler of 1 
+            event_scaler_hex = (1).to_bytes(2, byte_order).hex().upper()  # prescaler of 1 in ECU byte order
 
             # loop through ODTs in the DAQ list to get the last ODT number
             for odt in odts:
@@ -1179,6 +1189,7 @@ class CANedgeDAQ:
         # Identify which base names need suffixes (those with multiple signals)
         base_names_needing_suffix = {base_name for base_name, names in base_name_conflicts.items() if len(names) > 1}
         base_name_counters = {base_name: 0 for base_name in base_names_needing_suffix}
+        pid_overflow_warned = False  # DTOPID multiplexer is 8-bit (max 255)
 
         for daq_list in sorted(set(signal['DAQ_LIST_NUMBER'] for signal in signals_grouped)):
 
@@ -1190,6 +1201,9 @@ class CANedgeDAQ:
                 
             odts = sorted(set(signal['ODT_NUMBER'] for signal in signals_grouped if signal['DAQ_LIST_NUMBER'] == daq_list))
             for odt in odts:
+                if pid_counter > 255 and not pid_overflow_warned:
+                    print(f"WARNING: DTO PID {pid_counter} exceeds 8-bit multiplexer max (255) - DBC will not decode; check QP_BLOB FIRST_PID parsing")
+                    pid_overflow_warned = True
                 odt_signals = [s for s in signals_grouped if s['DAQ_LIST_NUMBER'] == daq_list and s['ODT_NUMBER'] == odt]
 
 
